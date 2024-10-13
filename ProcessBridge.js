@@ -1,4 +1,4 @@
-import { spawn } from 'child_process';
+import cp from 'child_process';
 import os from 'os';
 import EventEmitter from 'events';
 
@@ -12,7 +12,7 @@ class ChildProcessBridge extends EventEmitter {
     }
 
     spawn(command, args) {
-        this.process = spawn(command, args, { shell: true });
+        this.process = cp.spawn(command, args);
 
         this.process.stdout.on('data', (data) => {
             this.#stdout_buffer += data.toString();
@@ -44,6 +44,42 @@ class ChildProcessBridge extends EventEmitter {
     send(message) {
         this.process.stdin.write(`${message}${os.EOL}`);
     }
+
+    receive(timeout = 0) {
+        let listener;
+        let timeout_id;
+        return new Promise((resolve, reject) => {
+            listener = this.on('receive', (data) => {
+                this.removeListener('receive', listener);
+                clearTimeout(timeout_id);
+                resolve(data);
+            });
+            if (timeout > 0) {
+                timeout_id = setTimeout(() => {
+                    this.removeListener('receive', listener);
+                    reject();
+                }, timeout);
+            }
+        });
+    }
+
+    receive_err(timeout = 0) {
+        let listener;
+        let timeout_id;
+        return new Promise((resolve, reject) => {
+            listener = this.on('receive_err', (data) => {
+                this.removeListener('receive_err', listener);
+                clearTimeout(timeout_id);
+                resolve(data);
+            });
+            if (timeout > 0) {
+                timeout_id = setTimeout(() => {
+                    this.removeListener('receive_err', listener);
+                    reject();
+                }, timeout);
+            }
+        });
+    }
 }
 
 class ParentProcessBridge extends EventEmitter {
@@ -70,6 +106,24 @@ class ParentProcessBridge extends EventEmitter {
 
     send_err(message) {
         process.stderr.write(`${message}${os.EOL}`);
+    }
+
+    receive(timeout = 0) {
+        let listener;
+        let timeout_id;
+        return new Promise((resolve, reject) => {
+            listener = this.on('receive', (data) => {
+                this.removeListener('receive', listener);
+                clearTimeout(timeout_id);
+                resolve(data);
+            });
+            if (timeout > 0) {
+                timeout_id = setTimeout(() => {
+                    this.removeListener('receive', listener);
+                    reject();
+                }, timeout);
+            }
+        });
     }
 }
 
